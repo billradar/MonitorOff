@@ -1,14 +1,3 @@
----
-AIGC:
-  ContentProducer: '001191110102MAD55U9H0F10002'
-  ContentPropagator: '001191110102MAD55U9H0F10002'
-  Label: '1'
-  ProduceID: '41483870-4d27-452b-87d3-0bf52db619b3'
-  PropagateID: '41483870-4d27-452b-87d3-0bf52db619b3'
-  ReservedCode1: 'f9ce0cc0-2c3b-4246-a7b4-55e9b365857f'
-  ReservedCode2: 'f9ce0cc0-2c3b-4246-a7b4-55e9b365857f'
----
-
 # MonitorOff —— 关闭显示器
 
 **简体中文** | [English](README.md)
