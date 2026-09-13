@@ -1,0 +1,17 @@
+# Distribution binaries are published as GitHub Release assets,
+# not tracked in the repository
+/MonitorOff.exe
+
+# Build artifacts
+src/rust/target/
+src/rust/MonitorOff.exe
+src/csharp/MonitorOff.exe
+bin/
+obj/
+
+# OS junk
+Thumbs.db
+desktop.ini
+.DS_Store
+*.swp
+*.tmp
