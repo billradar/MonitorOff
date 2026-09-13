@@ -1,14 +1,3 @@
----
-AIGC:
-  ContentProducer: '001191110102MAD55U9H0F10002'
-  ContentPropagator: '001191110102MAD55U9H0F10002'
-  Label: '1'
-  ProduceID: '30db5da6-bdae-4751-b324-48aa346204fa'
-  PropagateID: '30db5da6-bdae-4751-b324-48aa346204fa'
-  ReservedCode1: 'bed0b788-9b58-4549-9ef6-b8bb1e49a993'
-  ReservedCode2: 'bed0b788-9b58-4549-9ef6-b8bb1e49a993'
----
-
 # Changelog
 
 All notable changes to this project will be documented in this file.
