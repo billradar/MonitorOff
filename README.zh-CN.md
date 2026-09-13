@@ -30,7 +30,9 @@ SendMessage(HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER, 2);
 
 ## 使用方法
 
-1. 从 [Releases](../../releases) 页面下载 `MonitorOff.exe`（预编译 x86 版，.NET Framework 4.x）；
+1. 从 [Releases](../../releases) 页面下载预编译版（任选其一）：
+   - `MonitorOff.exe` —— C# 版（x86，约 90KB，需 .NET Framework 4.x）
+   - `MonitorOff-rust.exe` —— Rust 版（x64，约 330KB，**零运行时依赖**）
 2. 双击运行，屏幕立即关闭；
 3. 移动鼠标或按任意键，屏幕恢复。
 
@@ -112,3 +114,4 @@ MonitorOff/
 ## 许可证
 
 [MIT](LICENSE)
+

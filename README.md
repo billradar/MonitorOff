@@ -29,7 +29,9 @@ This broadcasts the monitor-power system command (`0xF170`) to all top-level win
 
 ## Usage
 
-1. Download `MonitorOff.exe` from the [Releases](../../releases) page (prebuilt x86 build, .NET Framework 4.x).
+1. Download a prebuilt binary from the [Releases](../../releases) page:
+   - `MonitorOff.exe` — C# build (x86, ~90 KB, requires .NET Framework 4.x)
+   - `MonitorOff-rust.exe` — Rust build (x64, ~330 KB, **no runtime dependencies**)
 2. Double-click it — the screen turns off instantly.
 3. Move the mouse or press any key to turn it back on.
 
@@ -108,3 +110,4 @@ MonitorOff/
 ## License
 
 [MIT](LICENSE)
+
