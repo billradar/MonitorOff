@@ -1,6 +1,7 @@
 # Distribution binaries are published as GitHub Release assets,
 # not tracked in the repository
 /MonitorOff.exe
+/MonitorOff-linux
 
 # Build artifacts
 src/rust/target/

@@ -2,9 +2,9 @@
 
 [简体中文](README.zh-CN.md) | **English**
 
-Turn off your monitor with one double-click — no sleep, no lock screen, no console window.
+Turn off your monitor with one double-click/command — no sleep, no lock screen.
 
-![Platform](https://img.shields.io/badge/platform-Windows-0078D6)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-0078D6)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 ![C#](https://img.shields.io/badge/C%23-.NET%20Framework%204.x-9B4F96)
 ![Rust](https://img.shields.io/badge/Rust-stable-DEA584)
@@ -14,25 +14,36 @@ Turn off your monitor with one double-click — no sleep, no lock screen, no con
 - **Instant** — turns off the display immediately, using the same power-management channel as the "turn display off after timeout" setting
 - **Safe** — does not lock the workstation, does not hibernate or sleep; background tasks keep running
 - **Wake-friendly** — move the mouse or press any key and the screen comes back
-- **Portable** — single-file executable with an embedded monitor icon (8 sizes)
-- **Two reference implementations** — C# and Rust, functionally identical
+- **Portable** — single-file executable; Windows builds can embed the monitor icon (8 sizes)
+- **Cross-platform Rust build** — Windows via Win32, Linux/X11 via `xset dpms force off`
+- **C# reference implementation** — Windows-only .NET Framework build
 
 ## How It Works
 
-The whole tool boils down to a single Win32 call:
+On Windows, the Rust and C# builds use one Win32 monitor-power broadcast:
 
 ```c
-SendMessage(HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER, 2);
+SendMessageTimeout(HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER, 2,
+                   SMTO_ABORTIFHUNG, 1000, NULL);
 ```
 
-This broadcasts the monitor-power system command (`0xF170`) to all top-level windows; Windows powers off the display while the machine keeps running. Input (mouse move / key press) restores it.
+This broadcasts the monitor-power system command (`0xF170`) to all top-level windows; Windows powers off the display while the machine keeps running. Input (mouse move / key press) restores it. The timeout avoids waiting forever if another top-level window is hung.
+
+On Linux/X11, the Rust build runs:
+
+```sh
+xset dpms force off
+```
+
+Wayland does not provide one standard global monitor-off API, so compositor-specific support is intentionally not guessed.
 
 ## Usage
 
 1. Download a prebuilt binary from the [Releases](../../releases) page:
    - `MonitorOff.exe` — C# build (x86, ~90 KB, requires .NET Framework 4.x)
-   - `MonitorOff-rust.exe` — Rust build (x64, ~330 KB, **no runtime dependencies**)
-2. Double-click it — the screen turns off instantly.
+   - `MonitorOff-rust.exe` — Rust build for Windows (x64, **no runtime dependencies**)
+   - `MonitorOff-linux` — Rust build for Linux/X11 (requires `xset`)
+2. Run it — the screen turns off instantly.
 3. Move the mouse or press any key to turn it back on.
 
 To create a desktop shortcut (with the monitor icon), place the exe in the project root and double-click:
@@ -43,9 +54,9 @@ scripts\create_shortcut.bat
 
 ## Build from Source
 
-Both implementations embed `assets/MonitorOff.ico` and copy the result to the project root.
+Windows builds embed `assets/MonitorOff.ico` and copy the result to the project root.
 
-### Option 1 — C# (.NET Framework)
+### Option 1 — Windows C# (.NET Framework)
 
 **Requirements**
 
@@ -59,7 +70,7 @@ build.bat
 
 The icon is embedded at compile time via the `/win32icon` switch.
 
-### Option 2 — Rust
+### Option 2 — Windows Rust
 
 **Requirements**
 
@@ -73,10 +84,24 @@ build.bat
 
 `cargo build --release` produces the binary, then `scripts/inject_icon.ps1` (plain Windows PowerShell, no dependencies) embeds the icon into the PE resources.
 
+### Option 3 — Linux Rust
+
+**Requirements**
+
+- [Rust toolchain](https://rustup.rs) (stable)
+- X11 session with `xset` installed (`x11-xserver-utils` on Debian/Ubuntu, `xorg-xset` on Fedora/Arch-style package sets)
+
+```sh
+cd src/rust
+sh build.sh
+```
+
+`cargo build --release` produces the binary, then `build.sh` copies it to the project root as `MonitorOff-linux`.
+
 > **Which one should I ship?**
-> The Rust build is a fully native binary with **no runtime dependencies** (~330 KB, static CRT).
+> The Rust build is the main cross-platform implementation.
 > The C# build is smaller (~90 KB) but requires .NET Framework 4.x on the target machine.
-> On any standard Windows 7+ system both work; prefer Rust for stripped-down or unknown environments.
+> On Windows, prefer Rust for stripped-down or unknown environments. On Linux, use the Rust build.
 
 ## Project Structure
 
@@ -88,10 +113,12 @@ MonitorOff/
 │   ├── create_shortcut.bat     # One-click desktop shortcut with icon
 │   └── inject_icon.ps1         # Embed an .ico into a PE file (Win32 resource update)
 ├── src/
-│   ├── csharp/                 # C# implementation
+│   ├── csharp/                 # Windows C# implementation
 │   │   ├── MonitorOff.cs
 │   │   └── build.bat
-│   └── rust/                   # Rust implementation (zero crates)
+│   └── rust/                   # Cross-platform Rust implementation (zero crates)
+│       ├── build.bat
+│       ├── build.sh
 │       ├── Cargo.toml
 │       └── src/main.rs
 ├── CHANGELOG.md
@@ -105,7 +132,8 @@ MonitorOff/
 ## Notes
 
 - If your antivirus flags the executable, add it to the whitelist — the program only sends a monitor-power command.
-- `SendMessage(HWND_BROADCAST, ...)` is synchronous: if some top-level window is hung, the process stays alive until the broadcast completes. This is standard Windows behavior and matches the original tool.
+- The app uses `SendMessageTimeout(..., SMTO_ABORTIFHUNG, 1000, ...)` so a hung top-level window cannot keep the process alive indefinitely.
+- Linux support currently targets X11. On Wayland, use compositor-specific commands or run from an X11 session.
 
 ## License
 

@@ -35,14 +35,23 @@ namespace MonitorOff
         /// <summary>广播句柄：0xFFFF 表示发送给所有顶层窗口。</summary>
         private static readonly IntPtr HWND_BROADCAST = (IntPtr)0xFFFF;
 
+        /// <summary>遇到无响应窗口时放弃等待，避免程序卡住。</summary>
+        private const uint SMTO_ABORTIFHUNG = 0x0002;
+
+        /// <summary>广播等待上限（毫秒）。</summary>
+        private const uint TIMEOUT_MS = 1000;
+
         // ---------------- P/Invoke 声明 ----------------
 
-        [DllImport("user32.dll")]
-        private static extern IntPtr SendMessage(
+        [DllImport("user32.dll", EntryPoint = "SendMessageTimeoutW", SetLastError = true)]
+        private static extern IntPtr SendMessageTimeout(
             IntPtr hWnd,    // 目标窗口句柄（此处为广播句柄）
             uint Msg,       // 消息类型（WM_SYSCOMMAND）
             IntPtr wParam,  // 子命令（SC_MONITORPOWER）
-            IntPtr lParam); // 参数（2 = 关闭）
+            IntPtr lParam,  // 参数（2 = 关闭）
+            uint fuFlags,   // 超时策略
+            uint uTimeout,  // 超时时间
+            out IntPtr lpdwResult);
 
         // ---------------- 程序入口 ----------------
 
@@ -51,11 +60,15 @@ namespace MonitorOff
         private static void Main()
         {
             // 仅关闭显示器画面；系统、网络、后台任务均不受影响
-            SendMessage(
+            IntPtr result;
+            SendMessageTimeout(
                 HWND_BROADCAST,
                 WM_SYSCOMMAND,
                 (IntPtr)SC_MONITORPOWER,
-                (IntPtr)MONITOR_OFF);
+                (IntPtr)MONITOR_OFF,
+                SMTO_ABORTIFHUNG,
+                TIMEOUT_MS,
+                out result);
         }
     }
 }

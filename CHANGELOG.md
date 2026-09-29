@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Add Linux/X11 support to the Rust implementation through `xset dpms force off`.
+- Add `src/rust/build.sh` to build the Linux Rust binary and copy it to the project root as `MonitorOff-linux`.
+
+### Changed
+- Refactor the Rust entry point into platform-specific implementations while keeping the build dependency-free.
+- Update documentation to describe Windows and Linux behavior separately.
+
+### Fixed
+- Use `SendMessageTimeout(..., SMTO_ABORTIFHUNG, 1000, ...)` in both C# and Rust builds so a hung top-level window cannot keep MonitorOff alive indefinitely.
+- Use pointer-sized Win32 resource identifiers in `inject_icon.ps1` to make icon injection interop signatures match the native APIs more closely.
+
 ## [1.0.0] - 2026-09-13
 
 ### Added

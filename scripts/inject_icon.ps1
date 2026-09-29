@@ -20,7 +20,7 @@ public class IcoInjector {
     [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)]
     static extern IntPtr BeginUpdateResourceW(string fileName, bool deleteExisting);
     [DllImport("kernel32.dll", SetLastError=true)]
-    static extern bool UpdateResourceW(IntPtr hUpdate, ushort type, IntPtr name, ushort lang, byte[] data, uint cb);
+    static extern bool UpdateResourceW(IntPtr hUpdate, IntPtr type, IntPtr name, ushort lang, byte[] data, uint cb);
     [DllImport("kernel32.dll", SetLastError=true)]
     static extern bool EndUpdateResourceW(IntPtr hUpdate, bool discard);
 
@@ -30,13 +30,13 @@ public class IcoInjector {
     static extern IntPtr LoadLibraryExW(string f, IntPtr h, uint flags);
     [DllImport("kernel32.dll")] static extern bool FreeLibrary(IntPtr h);
     [DllImport("kernel32.dll", SetLastError=true)]
-    static extern bool EnumResourceNamesW(IntPtr h, ushort type, EnumNameProc cb, IntPtr param);
+    static extern bool EnumResourceNamesW(IntPtr h, IntPtr type, EnumNameProc cb, IntPtr param);
     [DllImport("kernel32.dll", SetLastError=true)]
-    static extern bool EnumResourceLanguagesW(IntPtr h, ushort type, IntPtr name, EnumLangProc cb, IntPtr param);
+    static extern bool EnumResourceLanguagesW(IntPtr h, IntPtr type, IntPtr name, EnumLangProc cb, IntPtr param);
 
     class ResItem { public IntPtr Name; public List<ushort> Langs = new List<ushort>(); }
 
-    static List<ResItem> EnumRes(IntPtr h, ushort type) {
+    static List<ResItem> EnumRes(IntPtr h, IntPtr type) {
         var list = new List<ResItem>();
         EnumNameProc cb = delegate(IntPtr mh, IntPtr t, IntPtr n, IntPtr p) {
             var item = new ResItem { Name = n };
@@ -96,15 +96,15 @@ public class IcoInjector {
         IntPtr tgt = LoadLibraryExW(exePath, IntPtr.Zero, 0x2);
         if (tgt != IntPtr.Zero) {
             try {
-                foreach (var g in EnumRes(tgt, 14)) foreach (var l in g.Langs) ok &= UpdateResourceW(hUpd, 14, g.Name, l, null, 0);
-                foreach (var ic in EnumRes(tgt, 3)) foreach (var l in ic.Langs) ok &= UpdateResourceW(hUpd, 3, ic.Name, l, null, 0);
+                foreach (var g in EnumRes(tgt, (IntPtr)14)) foreach (var l in g.Langs) ok &= UpdateResourceW(hUpd, (IntPtr)14, g.Name, l, null, 0);
+                foreach (var ic in EnumRes(tgt, (IntPtr)3)) foreach (var l in ic.Langs) ok &= UpdateResourceW(hUpd, (IntPtr)3, ic.Name, l, null, 0);
             } finally { FreeLibrary(tgt); }
         }
 
         // 写入新图标：RT_ICON(1..n) + RT_GROUP_ICON(ID=1)
         for (int i = 0; i < count; i++)
-            ok &= UpdateResourceW(hUpd, 3, (IntPtr)(i + 1), 0, blobs[i], sizes[i]);
-        ok &= UpdateResourceW(hUpd, 14, (IntPtr)1, 0, group, (uint)group.Length);
+            ok &= UpdateResourceW(hUpd, (IntPtr)3, (IntPtr)(i + 1), 0, blobs[i], sizes[i]);
+        ok &= UpdateResourceW(hUpd, (IntPtr)14, (IntPtr)1, 0, group, (uint)group.Length);
 
         if (!EndUpdateResourceW(hUpd, false)) return "FAIL: end update, err=" + Marshal.GetLastWin32Error();
         if (!ok) return "FAIL: some UpdateResource calls failed";

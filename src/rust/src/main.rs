@@ -1,48 +1,134 @@
 // =====================================================================
-// MonitorOff - 关闭显示器小工具（Rust 版，零依赖单文件）
+// MonitorOff - turn off the display without locking or suspending
 // ---------------------------------------------------------------------
-// 原理与 C# 版完全一致：
-//   通过 FFI 调用 Win32 API，向系统广播 WM_SYSCOMMAND / SC_MONITORPOWER
-//   消息，命令显示子系统立即关闭显示器（与"等待超时自动熄屏"同一底层
-//   机制）。主机保持正常运行：不锁屏、不休眠、不影响后台任务；
-//   移动鼠标或按任意键，显示器自动点亮。
+// Windows: broadcasts WM_SYSCOMMAND / SC_MONITORPOWER through user32.dll.
+// Linux:   uses xset on X11, matching the desktop's DPMS power path.
 //
-// 与 .NET 版的区别：
-//   - 编译产物为纯原生代码，不依赖 .NET Framework 运行时；
-//   - 体积更小、启动更快；
-//   - 本项目零第三方 crate 依赖，仅需官方 Rust 工具链即可编译。
-//
-// 编译：双击 build.bat（或手工执行 cargo build --release）
+// The project intentionally keeps the Rust build dependency-free.
 // =====================================================================
 
-// 发布版不显示控制台窗口（等价 MSVC /subsystem:windows），
-// 调试构建保留控制台便于排错。
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
-// ---------------- Win32 消息常量 ----------------
-
-const WM_SYSCOMMAND: u32 = 0x0112;      // 系统命令消息
-const SC_MONITORPOWER: usize = 0xF170; // 显示器电源子命令
-const MONITOR_OFF: isize = 2;           // lParam：2=关闭 1=低功耗 -1=打开
-const HWND_BROADCAST: isize = 0xFFFF;   // 广播给所有顶层窗口
-
-// ---------------- FFI 声明（等价 C# 的 P/Invoke） ----------------
-
-#[link(name = "user32")]
-extern "system" {
-    /// user32.dll 的 SendMessageW：向窗口发送消息。
-    /// x64 下句柄/参数为 8 字节，与 isize/usize 对应。
-    fn SendMessageW(
-        hwnd: isize,   // 目标窗口句柄（此处为广播句柄）
-        msg: u32,      // 消息类型（WM_SYSCOMMAND）
-        wparam: usize, // 子命令（SC_MONITORPOWER）
-        lparam: isize, // 参数（2 = 关闭）
-    ) -> isize;
-}
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+#![allow(non_snake_case)]
 
 fn main() {
-    // 仅关闭显示器画面；系统、网络、后台任务均不受影响
-    unsafe {
-        SendMessageW(HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER, MONITOR_OFF);
+    if let Err(err) = turn_monitor_off() {
+        eprintln!("MonitorOff: {err}");
+        std::process::exit(1);
+    }
+}
+
+#[cfg(windows)]
+fn turn_monitor_off() -> Result<(), String> {
+    windows_impl::turn_monitor_off()
+}
+
+#[cfg(target_os = "linux")]
+fn turn_monitor_off() -> Result<(), String> {
+    linux_impl::turn_monitor_off()
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+fn turn_monitor_off() -> Result<(), String> {
+    unsupported_impl::turn_monitor_off()
+}
+
+#[cfg(windows)]
+mod windows_impl {
+    const WM_SYSCOMMAND: u32 = 0x0112;
+    const SC_MONITORPOWER: usize = 0xF170;
+    const MONITOR_OFF: isize = 2;
+    const HWND_BROADCAST: isize = 0xFFFF;
+    const SMTO_ABORTIFHUNG: u32 = 0x0002;
+    const TIMEOUT_MS: u32 = 1000;
+
+    #[link(name = "user32")]
+    extern "system" {
+        fn SendMessageTimeoutW(
+            hwnd: isize,
+            msg: u32,
+            wparam: usize,
+            lparam: isize,
+            flags: u32,
+            timeout: u32,
+            result: *mut isize,
+        ) -> isize;
+    }
+
+    pub fn turn_monitor_off() -> Result<(), String> {
+        let mut result = 0isize;
+        let status = unsafe {
+            SendMessageTimeoutW(
+                HWND_BROADCAST,
+                WM_SYSCOMMAND,
+                SC_MONITORPOWER,
+                MONITOR_OFF,
+                SMTO_ABORTIFHUNG,
+                TIMEOUT_MS,
+                &mut result,
+            )
+        };
+
+        if status == 0 {
+            Err("Windows did not accept the monitor power broadcast before the timeout".to_string())
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod linux_impl {
+    use std::env;
+    use std::process::{Command, Stdio};
+
+    pub fn turn_monitor_off() -> Result<(), String> {
+        let session_type = env::var("XDG_SESSION_TYPE").unwrap_or_default();
+        if session_type.eq_ignore_ascii_case("wayland") {
+            return wayland_error();
+        }
+
+        if session_type.eq_ignore_ascii_case("x11") || env::var_os("DISPLAY").is_some() {
+            return turn_off_x11();
+        }
+
+        if env::var_os("WAYLAND_DISPLAY").is_some() {
+            return wayland_error();
+        }
+
+        Err("no graphical session detected: DISPLAY and WAYLAND_DISPLAY are both unset".to_string())
+    }
+
+    fn wayland_error() -> Result<(), String> {
+        Err(
+            "Wayland session detected, but generic Wayland has no standard global monitor-off API. \
+Use a compositor-specific command or run MonitorOff from an X11 session with xset available."
+                .to_string(),
+        )
+    }
+
+    fn turn_off_x11() -> Result<(), String> {
+        let output = Command::new("xset")
+            .args(["dpms", "force", "off"])
+            .stdin(Stdio::null())
+            .output()
+            .map_err(|err| format!("failed to run xset: {err}. Install x11-xserver-utils/xorg-xset."))?;
+
+        if output.status.success() {
+            return Ok(());
+        }
+
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if stderr.is_empty() {
+            Err(format!("xset exited with status {}", output.status))
+        } else {
+            Err(format!("xset failed: {stderr}"))
+        }
+    }
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+mod unsupported_impl {
+    pub fn turn_monitor_off() -> Result<(), String> {
+        Err(format!("unsupported platform: {}", std::env::consts::OS))
     }
 }
