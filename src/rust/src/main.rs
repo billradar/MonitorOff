@@ -2,7 +2,7 @@
 // MonitorOff - turn off the display without locking or suspending
 // ---------------------------------------------------------------------
 // Windows: broadcasts WM_SYSCOMMAND / SC_MONITORPOWER through user32.dll.
-// Linux:   uses xset on X11, matching the desktop's DPMS power path.
+// Linux:   uses xset on X11 or the compositor's power command on Wayland.
 //
 // The project intentionally keeps the Rust build dependency-free.
 // =====================================================================
@@ -83,35 +83,49 @@ mod linux_impl {
 
     pub fn turn_monitor_off() -> Result<(), String> {
         let session_type = env::var("XDG_SESSION_TYPE").unwrap_or_default();
-        if session_type.eq_ignore_ascii_case("wayland") {
-            return wayland_error();
+        // Wayland sessions commonly set DISPLAY for XWayland too. Never treat
+        // that compatibility display as the physical display's power control.
+        if session_type.eq_ignore_ascii_case("wayland")
+            || (env::var_os("WAYLAND_DISPLAY").is_some()
+                && !session_type.eq_ignore_ascii_case("x11"))
+        {
+            return turn_off_wayland();
         }
 
         if session_type.eq_ignore_ascii_case("x11") || env::var_os("DISPLAY").is_some() {
             return turn_off_x11();
         }
 
-        if env::var_os("WAYLAND_DISPLAY").is_some() {
-            return wayland_error();
-        }
-
         Err("no graphical session detected: DISPLAY and WAYLAND_DISPLAY are both unset".to_string())
     }
 
-    fn wayland_error() -> Result<(), String> {
-        Err(
-            "Wayland session detected, but generic Wayland has no standard global monitor-off API. \
-Use a compositor-specific command or run MonitorOff from an X11 session with xset available."
-                .to_string(),
-        )
+    fn turn_off_wayland() -> Result<(), String> {
+        let desktop = env::var("XDG_CURRENT_DESKTOP").unwrap_or_default();
+        if env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some()
+            || desktop.split(':').any(|part| part.eq_ignore_ascii_case("Hyprland"))
+        {
+            return run("hyprctl", &["dispatch", "dpms", "off"]);
+        }
+        if env::var_os("SWAYSOCK").is_some()
+            || desktop.split(':').any(|part| part.eq_ignore_ascii_case("sway"))
+        {
+            return run("swaymsg", &["output", "*", "power", "off"]);
+        }
+        Err(format!(
+            "unsupported Wayland compositor (XDG_CURRENT_DESKTOP={desktop:?}); supported: Sway and Hyprland"
+        ))
     }
 
     fn turn_off_x11() -> Result<(), String> {
-        let output = Command::new("xset")
-            .args(["dpms", "force", "off"])
+        run("xset", &["dpms", "force", "off"])
+    }
+
+    fn run(program: &str, args: &[&str]) -> Result<(), String> {
+        let output = Command::new(program)
+            .args(args)
             .stdin(Stdio::null())
             .output()
-            .map_err(|err| format!("failed to run xset: {err}. Install x11-xserver-utils/xorg-xset."))?;
+            .map_err(|err| format!("failed to run {program}: {err}. Install {program} and run from the graphical session."))?;
 
         if output.status.success() {
             return Ok(());
@@ -119,9 +133,9 @@ Use a compositor-specific command or run MonitorOff from an X11 session with xse
 
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         if stderr.is_empty() {
-            Err(format!("xset exited with status {}", output.status))
+            Err(format!("{program} exited with status {}", output.status))
         } else {
-            Err(format!("xset failed: {stderr}"))
+            Err(format!("{program} failed: {stderr}"))
         }
     }
 }

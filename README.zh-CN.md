@@ -15,7 +15,7 @@
 - **安全** —— 不锁定工作站、不进入休眠或睡眠，后台任务照常运行
 - **易唤醒** —— 移动鼠标或按任意键，屏幕立即恢复
 - **便携** —— 单文件可执行程序；Windows 产物可内嵌显示器图标（8 种尺寸）
-- **Rust 跨平台实现** —— Windows 走 Win32，Linux/X11 走 `xset dpms force off`
+- **Rust 跨平台实现** —— Windows 走 Win32；Linux 支持 X11、Sway 和 Hyprland
 - **C# 参考实现** —— Windows-only .NET Framework 构建
 
 ## 工作原理
@@ -36,14 +36,14 @@ Linux/X11 下，Rust 版本执行：
 xset dpms force off
 ```
 
-Wayland 没有统一的全局关屏 API，因此本项目不猜测各桌面环境的私有命令。
+Wayland 下，Sway 使用 `swaymsg output '*' power off`，Hyprland 使用 `hyprctl dispatch dpms off`。其他合成器会明确报不支持；不会误用 XWayland 的 `DISPLAY`。
 
 ## 使用方法
 
 1. 从 [Releases](../../releases) 页面下载预编译版（任选其一）：
    - `MonitorOff.exe` —— C# 版（x86，约 90KB，需 .NET Framework 4.x）
    - `MonitorOff-rust.exe` —— Windows Rust 版（x64，**零运行时依赖**）
-   - `MonitorOff-linux` —— Linux/X11 Rust 版（需要 `xset`）
+   - `MonitorOff-linux` —— Linux Rust 版（支持 X11、Sway 和 Hyprland）
 2. 运行程序，屏幕立即关闭；
 3. 移动鼠标或按任意键，屏幕恢复。
 
@@ -92,7 +92,7 @@ build.bat
 **环境要求**
 
 - [Rust 工具链](https://rustup.rs)（stable 版）
-- X11 会话，并已安装 `xset`（Debian/Ubuntu 为 `x11-xserver-utils`，Fedora/Arch 类包名通常为 `xorg-xset`）
+- X11 会话安装 `xset`（Debian/Ubuntu 为 `x11-xserver-utils`）；或者 Wayland 下使用 Sway（`swaymsg`）或 Hyprland（`hyprctl`）
 
 ```sh
 cd src/rust
@@ -136,7 +136,7 @@ MonitorOff/
 
 - 若杀毒软件误报，可将程序加入白名单 —— 本程序仅发送显示器电源管理指令；
 - 程序使用 `SendMessageTimeout(..., SMTO_ABORTIFHUNG, 1000, ...)`，个别顶层窗口无响应时不会导致进程无限等待。
-- Linux 支持当前面向 X11；Wayland 请使用桌面环境/合成器自己的命令，或在 X11 会话下运行。
+- Wayland 当前支持 Sway 和 Hyprland。请在图形用户会话中运行，确保会话环境变量可用。GNOME、KDE Plasma 等其他合成器目前会明确报不支持。
 
 ## 许可证
 

@@ -15,7 +15,7 @@ Turn off your monitor with one double-click/command — no sleep, no lock screen
 - **Safe** — does not lock the workstation, does not hibernate or sleep; background tasks keep running
 - **Wake-friendly** — move the mouse or press any key and the screen comes back
 - **Portable** — single-file executable; Windows builds can embed the monitor icon (8 sizes)
-- **Cross-platform Rust build** — Windows via Win32, Linux/X11 via `xset dpms force off`
+- **Cross-platform Rust build** — Windows via Win32; Linux via X11, Sway, or Hyprland
 - **C# reference implementation** — Windows-only .NET Framework build
 
 ## How It Works
@@ -35,14 +35,14 @@ On Linux/X11, the Rust build runs:
 xset dpms force off
 ```
 
-Wayland does not provide one standard global monitor-off API, so compositor-specific support is intentionally not guessed.
+On Wayland, Sway uses `swaymsg output '*' power off`, and Hyprland uses `hyprctl dispatch dpms off`. Other Wayland compositors return an explicit unsupported error; XWayland's `DISPLAY` is never used as a fallback.
 
 ## Usage
 
 1. Download a prebuilt binary from the [Releases](../../releases) page:
    - `MonitorOff.exe` — C# build (x86, ~90 KB, requires .NET Framework 4.x)
    - `MonitorOff-rust.exe` — Rust build for Windows (x64, **no runtime dependencies**)
-   - `MonitorOff-linux` — Rust build for Linux/X11 (requires `xset`)
+   - `MonitorOff-linux` — Rust build for Linux/X11, Sway, and Hyprland
 2. Run it — the screen turns off instantly.
 3. Move the mouse or press any key to turn it back on.
 
@@ -89,7 +89,7 @@ build.bat
 **Requirements**
 
 - [Rust toolchain](https://rustup.rs) (stable)
-- X11 session with `xset` installed (`x11-xserver-utils` on Debian/Ubuntu, `xorg-xset` on Fedora/Arch-style package sets)
+- X11 with `xset` installed (`x11-xserver-utils` on Debian/Ubuntu), or Wayland with Sway (`swaymsg`) or Hyprland (`hyprctl`)
 
 ```sh
 cd src/rust
@@ -133,7 +133,7 @@ MonitorOff/
 
 - If your antivirus flags the executable, add it to the whitelist — the program only sends a monitor-power command.
 - The app uses `SendMessageTimeout(..., SMTO_ABORTIFHUNG, 1000, ...)` so a hung top-level window cannot keep the process alive indefinitely.
-- Linux support currently targets X11. On Wayland, use compositor-specific commands or run from an X11 session.
+- Wayland support currently covers Sway and Hyprland. Run the program inside your graphical user session, with its session environment available. GNOME, KDE Plasma, and other compositors currently report unsupported.
 
 ## License
 
