@@ -1,0 +1,119 @@
+name: Build and release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/release.yml
+      - RELEASE_VERSION
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'New release tag (for example v1.1.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: monitoroff-release
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build C# x86 and Rust x64
+        shell: pwsh
+        env:
+          RUSTFLAGS: -C target-feature=+crt-static
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          $csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          & $csc /nologo /target:winexe /platform:x86 /optimize+ /win32icon:assets/MonitorOff.ico /out:dist/MonitorOff.exe src/csharp/MonitorOff.cs
+          if ($LASTEXITCODE -ne 0) { throw "C# build failed" }
+          rustup toolchain install stable --profile minimal
+          cargo +stable build --release --locked --manifest-path src/rust/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { throw "Rust build failed" }
+          Copy-Item src/rust/target/release/MonitorOff.exe dist/MonitorOff-rust.exe
+          & ./scripts/inject_icon.ps1 -Exe "$PWD/dist/MonitorOff-rust.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-binaries
+          path: dist/*
+          if-no-files-found: error
+
+  linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Linux binary
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          rustup toolchain install stable --profile minimal
+          cargo +stable build --release --locked --manifest-path src/rust/Cargo.toml
+          mkdir -p dist
+          install -m 755 src/rust/target/release/MonitorOff dist/MonitorOff-linux
+          tar -C dist -czf "MonitorOff-linux-$ARCH.tar.gz" MonitorOff-linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-${{ matrix.arch }}
+          path: MonitorOff-linux-*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish new release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          INPUT_VERSION: ${{ inputs.version }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          VERSION="$INPUT_VERSION"
+          if [ -z "$VERSION" ]; then VERSION="$(cat RELEASE_VERSION)"; fi
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Expected a version tag such as v1.1.0" >&2
+            exit 1
+          fi
+          cd dist
+          sha256sum MonitorOff.exe MonitorOff-rust.exe MonitorOff-linux-*.tar.gz > SHA256SUMS.txt
+          cat > release-notes.md <<'NOTES'
+          MonitorOff: turn off displays without suspending the computer.
+
+          Downloads:
+          - MonitorOff.exe: Windows x86 C# build, requires .NET Framework 4.x.
+          - MonitorOff-rust.exe: Windows x64 Rust build.
+          - MonitorOff-linux-amd64.tar.gz: Linux x86-64.
+          - MonitorOff-linux-arm64.tar.gz: Linux ARM64, including Raspberry Pi OS 64-bit.
+
+          Linux supports X11 (xset), Sway (swaymsg), and Hyprland (hyprctl).
+          GNOME and KDE Plasma Wayland sessions are currently unsupported.
+          Extract the Linux archive and run ./MonitorOff-linux from your graphical session.
+          Actual monitor power behavior depends on your compositor and configuration.
+          SHA256SUMS.txt contains checksums for all downloads.
+          NOTES
+          gh release create "$VERSION" --target "$SOURCE_SHA" --title "$VERSION" --notes-file release-notes.md MonitorOff.exe MonitorOff-rust.exe MonitorOff-linux-*.tar.gz SHA256SUMS.txt
