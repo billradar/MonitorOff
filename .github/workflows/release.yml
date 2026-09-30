@@ -33,7 +33,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force dist | Out-Null
           $csc = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
-          & $csc /nologo /target:winexe /platform:x86 /optimize+ /win32icon:assets/MonitorOff.ico /out:dist/MonitorOff.exe src/csharp/MonitorOff.cs
+          & $csc /nologo /target:winexe /platform:x86 /optimize+ /win32icon:"assets\MonitorOff.ico" /out:"dist\MonitorOff.exe" "src\csharp\MonitorOff.cs"
           if ($LASTEXITCODE -ne 0) { throw "C# build failed" }
           rustup toolchain install stable --profile minimal
           cargo +stable build --release --locked --manifest-path src/rust/Cargo.toml
